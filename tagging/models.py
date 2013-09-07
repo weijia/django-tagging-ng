@@ -34,9 +34,9 @@ else:
 ############
 
 class TagManager(BaseManager):
-    def update_tags(self, obj, tag_names):
+    def update_tags(self, obj, tag_names, tag_app = None):
         """
-        Update tags associated with an object.
+        Update tags associated with an object. Old tags that not in the tag_names will be removed
         """
         ctype = ContentType.objects.get_for_model(obj)
         current_tags = list(self.filter(items__content_type__pk=ctype.pk,
@@ -57,9 +57,10 @@ class TagManager(BaseManager):
         for tag_name in updated_tag_names:
             if tag_name not in current_tag_names:
                 tag, created = self.get_or_create(name=tag_name)
-                TaggedItem._default_manager.create(tag=tag, object=obj)
+                print 'tag app:', tag_app
+                TaggedItem._default_manager.create(tag=tag, object=obj, tag_app=tag_app)
 
-    def add_tag(self, obj, tag_name):
+    def add_tag(self, obj, tag_name, tag_app = None):
         """
         Associates the given object with a tag.
         """
@@ -73,8 +74,11 @@ class TagManager(BaseManager):
             tag_name = tag_name.lower()
         tag, created = self.get_or_create(name=tag_name)
         ctype = ContentType.objects.get_for_model(obj)
-        TaggedItem._default_manager.get_or_create(
+        tagged_item, created = TaggedItem._default_manager.get_or_create(
             tag=tag, content_type=ctype, object_id=obj.pk)
+        if created:
+            tagged_item.tag_app = tag_app
+            tagged_item.save()
 
     def get_for_object(self, obj):
         """
@@ -173,8 +177,16 @@ class TagManager(BaseManager):
         Passing a value for ``min_count`` implies ``counts=True``.
         """
 
-        extra_joins = ' '.join(queryset.query.get_from_clause()[0][1:])
-        where, params = queryset.query.where.as_sql()
+        if getattr(queryset.query, 'get_compiler', None):
+            # Django 1.2 and up compatible (multiple databases)
+            compiler = queryset.query.get_compiler(using='default')
+            extra_joins = ' '.join(compiler.get_from_clause()[0][1:])
+            where, params = queryset.query.where.as_sql(compiler.quote_name_unless_alias, compiler.connection)
+        else:
+            # Django 1.1 and down compatible (single database)
+            extra_joins = ' '.join(queryset.query.get_from_clause()[0][1:])
+            where, params = queryset.query.where.as_sql()
+
         if where:
             extra_criteria = 'AND %s' % where
         else:
@@ -611,6 +623,9 @@ class TaggedItem(models.Model):
     content_type = models.ForeignKey(ContentType, verbose_name=_('content type'))
     object_id    = models.PositiveIntegerField(_('object id'), db_index=True)
     object       = generic.GenericForeignKey('content_type', 'object_id')
+    timestamp    = models.DateTimeField(_('date published'), auto_now_add = True)
+    tag_app      = models.CharField (_(u"Tag creator"),help_text=_(u"Tag creator") , max_length=50, null=True, blank=True)
+    
 
     objects = TaggedItemManager()
 
