@@ -57,10 +57,9 @@ class TagManager(BaseManager):
         for tag_name in updated_tag_names:
             if tag_name not in current_tag_names:
                 tag, created = self.get_or_create(name=tag_name)
-                print 'tag app:', tag_app
                 TaggedItem._default_manager.create(tag=tag, object=obj, tag_app=tag_app)
 
-    def add_tag(self, obj, tag_name, tag_app = None):
+    def add_tag(self, obj, tag_name, tag_app=None):
         """
         Associates the given object with a tag.
         """
@@ -74,11 +73,8 @@ class TagManager(BaseManager):
             tag_name = tag_name.lower()
         tag, created = self.get_or_create(name=tag_name)
         ctype = ContentType.objects.get_for_model(obj)
-        tagged_item, created = TaggedItem._default_manager.get_or_create(
-            tag=tag, content_type=ctype, object_id=obj.pk)
-        if created:
-            tagged_item.tag_app = tag_app
-            tagged_item.save()
+        TaggedItem._default_manager.get_or_create(
+            tag=tag, content_type=ctype, object_id=obj.pk, tag_app=tag_app)
 
     def get_for_object(self, obj):
         """
