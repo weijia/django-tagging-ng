@@ -11,7 +11,8 @@ import logging
 
 logger = logging.getLogger('tagging.models')
 
-from django.contrib.contenttypes import generic
+# from django.contrib.contenttypes import generic
+from django.contrib.contenttypes import fields
 from django.contrib.contenttypes.models import ContentType
 from django.db import connection, models, IntegrityError
 from django.db.models.query import QuerySet
@@ -25,16 +26,18 @@ qn = connection.ops.quote_name
 
 if settings.MULTILINGUAL_TAGS:
     import multilingual
+
     BaseManager = multilingual.Manager
 else:
     BaseManager = models.Manager
+
 
 ############
 # Managers #
 ############
 
 class TagManager(BaseManager):
-    def update_tags(self, obj, tag_names, tag_app = None):
+    def update_tags(self, obj, tag_names, tag_app=None):
         """
         Update tags associated with an object. Old tags that not in the tag_names will be removed
         """
@@ -125,7 +128,7 @@ class TagManager(BaseManager):
         tags = []
         # TODO add ordering by name right here
         for row in cursor.fetchall():
-            t = self.model.objects.get(pk = row[0])
+            t = self.model.objects.get(pk=row[0])
             if counts:
                 t.count = row[1]
             tags.append(t)
@@ -240,7 +243,7 @@ class TagManager(BaseManager):
         cursor.execute(query, params)
         related = []
         for row in cursor.fetchall():
-            tag = self.model.objects.get(pk = row[0])
+            tag = self.model.objects.get(pk=row[0])
             if counts is True:
                 tag.count = row[1]
             related.append(tag)
@@ -314,7 +317,7 @@ class TagManager(BaseManager):
                 changed = False
                 head = [p.strip() for p in parts[0].split(':')][:2]
                 tag_from = head[0]
-                tag_to = (len(head)==2) and head[1] or head[0]
+                tag_to = (len(head) == 2) and head[1] or head[0]
 
                 try:
                     tag = self.get(name=tag_from)
@@ -337,8 +340,8 @@ class TagManager(BaseManager):
     def dumpAsText(self):
         tags = self.all()
         return '\n'.join(filter(lambda x: x, \
-                [self.dumpSynonymsAsText(t) for t in tags] + \
-                [self.dumpTagAsText(t) for t in tags]))
+                                [self.dumpSynonymsAsText(t) for t in tags] + \
+                                [self.dumpTagAsText(t) for t in tags]))
 
     def dumpTagAsText(self, tag):
         parts = [tag.name, ]
@@ -383,6 +386,7 @@ class TaggedItemManager(models.Manager):
           Now that the queryset-refactor branch is in the trunk, this can be
           tidied up significantly.
     """
+
     def get_by_model(self, queryset_or_model, tags):
         """
         Create a ``QuerySet`` containing instances of the specified
@@ -552,10 +556,10 @@ class TaggedItemManager(models.Manager):
         else:
             return []
 
+
 ##########
 # Models #
 ##########
-
 class Tag(models.Model):
     """
     A tag.
@@ -573,6 +577,7 @@ class Tag(models.Model):
             ordering = ('name',)
         verbose_name = _('tag')
         verbose_name_plural = _('tags')
+        app_label = 'tagging'
 
     def __unicode__(self):
         return self.name or 'tag-with-id: %d' % self.id
@@ -580,9 +585,9 @@ class Tag(models.Model):
     def __lt__(self, other):
         return self.name < other.name
 
-    def delete(self, update = True):
+    def delete(self, update=True):
         if update:
-            self._updateLinkedObjects(remove_this = True)
+            self._updateLinkedObjects(remove_this=True)
         return super(Tag, self).delete()
 
     def save(self, *args, **kwargs):
@@ -590,38 +595,44 @@ class Tag(models.Model):
         self._updateLinkedObjects()
         return result
 
-    def _updateLinkedObjects(self, remove_this = False):
+    def _updateLinkedObjects(self, remove_this=False):
         """Updates TagField's for all objects with this tag."""
         for item in TaggedItem.objects.filter(tag=self):
             item._updateLinkedObjects(remove_this=remove_this)
+
 
 if settings.MULTILINGUAL_TAGS:
     """Monkey-patching for translation getter,
        to fallback to another translation."""
 
     from multilingual.translation import getter_generator
+
     _orig_name_getter = Tag.get_name
-    def _my_get_name(self, language_id = None, fallback = False):
+
+
+    def _my_get_name(self, language_id=None, fallback=False):
         value = _orig_name_getter(self, language_id, fallback)
         if value is None and language_id is None:
-            #print 'BLAH BLAH for lang_id: %s' % language_id
+            # print 'BLAH BLAH for lang_id: %s' % language_id
             value = _orig_name_getter(self, settings.FALLBACK_LANGUAGE, fallback)
-            #print 'New value for lang_id=%s is %s' % (settings.FALLBACK_LANGUAGE, value)
+            # print 'New value for lang_id=%s is %s' % (settings.FALLBACK_LANGUAGE, value)
         return value
+
+
     _my_get_name.short_description = getattr(Tag.name, 'verbose_name', 'name')
     setattr(Tag, 'get_name', _my_get_name)
+
 
 class TaggedItem(models.Model):
     """
     Holds the relationship between a tag and the item being tagged.
     """
-    tag          = models.ForeignKey(Tag, verbose_name=_('tag'), related_name='items')
+    tag = models.ForeignKey(Tag, verbose_name=_('tag'), related_name='items')
     content_type = models.ForeignKey(ContentType, verbose_name=_('content type'))
-    object_id    = models.PositiveIntegerField(_('object id'), db_index=True)
-    object       = generic.GenericForeignKey('content_type', 'object_id')
-    timestamp    = models.DateTimeField(_('date published'), auto_now_add = True)
-    tag_app      = models.CharField (_(u"Tag creator"),help_text=_(u"Tag creator") , max_length=50, null=True, blank=True)
-    
+    object_id = models.PositiveIntegerField(_('object id'), db_index=True)
+    object = fields.GenericForeignKey('content_type', 'object_id')
+    timestamp = models.DateTimeField(_('date published'), auto_now_add=True)
+    tag_app = models.CharField(_(u"Tag creator"), help_text=_(u"Tag creator"), max_length=50, null=True, blank=True)
 
     objects = TaggedItemManager()
 
@@ -630,15 +641,16 @@ class TaggedItem(models.Model):
         unique_together = (('tag', 'content_type', 'object_id'),)
         verbose_name = _('tagged item')
         verbose_name_plural = _('tagged items')
+        app_label = 'tagging'
 
     def __unicode__(self):
         return u'%s [%s]' % (self.object, self.tag)
 
-    def _updateLinkedObjects(self, remove_this = False):
+    def _updateLinkedObjects(self, remove_this=False):
         from tagging.fields import TagField
-        object_tags = [ tag.name or tag.name_any \
-                      for tag in Tag.objects.get_for_object(self.object) \
-                              if not remove_this or tag.id != self.tag_id ]
+        object_tags = [tag.name or tag.name_any \
+                       for tag in Tag.objects.get_for_object(self.object) \
+                       if not remove_this or tag.id != self.tag_id]
         tags_as_string = ', '.join(object_tags)
 
         for field in self.object._meta.fields:
@@ -647,10 +659,11 @@ class TaggedItem(models.Model):
                 self.object.save()
                 break
 
-    def delete(self, update = True):
+    def delete(self, update=True):
         if update:
             self._updateLinkedObjects(remove_this=True)
         return super(TaggedItem, self).delete()
+
 
 class Synonym(models.Model):
     name = models.CharField(max_length=50, unique=True, db_index=True)
@@ -663,4 +676,4 @@ class Synonym(models.Model):
         verbose_name = _("Tag's synonym")
         verbose_name_plural = _("Tags' synonyms")
         ordering = ('name',)
-
+        app_label = 'tagging'
