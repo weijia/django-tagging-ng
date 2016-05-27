@@ -2,6 +2,7 @@
 Models and managers for generic tagging.
 """
 # Python 2.3 compatibility
+
 try:
     set
 except NameError:
@@ -12,7 +13,7 @@ import logging
 logger = logging.getLogger('tagging.models')
 
 # from django.contrib.contenttypes import generic
-from django.contrib.contenttypes import fields
+from compat import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import connection, models, IntegrityError
 from django.db.models.query import QuerySet
@@ -630,7 +631,7 @@ class TaggedItem(models.Model):
     tag = models.ForeignKey(Tag, verbose_name=_('tag'), related_name='items')
     content_type = models.ForeignKey(ContentType, verbose_name=_('content type'))
     object_id = models.PositiveIntegerField(_('object id'), db_index=True)
-    object = fields.GenericForeignKey('content_type', 'object_id')
+    object = GenericForeignKey('content_type', 'object_id')
     timestamp = models.DateTimeField(_('date published'), auto_now_add=True)
     tag_app = models.CharField(_(u"Tag creator"), help_text=_(u"Tag creator"), max_length=50, null=True, blank=True)
 
